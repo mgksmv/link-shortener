@@ -18,7 +18,7 @@ class LinkForm
                     ->url()
                     ->required()
                     ->label('Оригинальный URL')
-                    ->maxLength(255)
+                    ->maxLength(2048)
                     ->placeholder('https://example.com'),
                 TextInput::make('code')
                     ->label('Код')
