@@ -1,0 +1,103 @@
+services:
+  traefik:
+    image: traefik:3.6
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedByDefault=false
+      - --entryPoints.web.address=:80
+      - --entryPoints.websecure.address=:443
+      - --certificatesResolvers.le.acme.httpChallenge=true
+      - --certificatesResolvers.le.acme.httpChallenge.entrypoint=web
+      - --certificatesResolvers.le.acme.email=${ACME_EMAIL}
+      - --certificatesResolvers.le.acme.storage=/letsencrypt/acme.json
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_certs:/letsencrypt
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik_public"
+    networks:
+      - default
+      - traefik_public
+
+  app-nginx:
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    restart: unless-stopped
+    volumes:
+      - .:/app
+      - storage:/app/storage/app
+    environment:
+      DOMAIN: ${APP_DOMAIN}
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik_public
+      - traefik.http.routers.appNginx.rule=Host(`${APP_DOMAIN}`)
+      - traefik.http.routers.appNginx.entryPoints=web
+      - traefik.http.routers.appNginx.middlewares=redirectToHttps
+      - traefik.http.routers.appNginxSecure.rule=Host(`${APP_DOMAIN}`)
+      - traefik.http.routers.appNginxSecure.entryPoints=websecure
+      - traefik.http.routers.appNginxSecure.tls=true
+      - traefik.http.routers.appNginxSecure.tls.certresolver=le
+      - traefik.http.services.appNginx.loadBalancer.server.port=80
+      - traefik.http.middlewares.redirectToHttps.redirectscheme.scheme=https
+    networks:
+      - default
+      - traefik_public
+
+  app-php-fpm:
+    build:
+      context: .
+      dockerfile: docker/php-fpm/Dockerfile
+      args:
+        INSTALL_XDEBUG: "false"
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      - storage:/app/storage/app
+    depends_on:
+      - db
+    networks:
+      - default
+
+  app-node:
+    build:
+      context: .
+      dockerfile: docker/node/Dockerfile
+    volumes:
+      - .:/app
+    depends_on:
+      - app-php-fpm
+    networks:
+      - default
+
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - db:/var/lib/postgresql/data
+      - './docker/pgsql/create-testing-database.sql:/docker-entrypoint-initdb.d/10-create-testing-database.sql'
+    networks:
+      - default
+
+networks:
+  traefik_public:
+  default:
+
+volumes:
+  traefik_certs:
+  storage:
+  db:
