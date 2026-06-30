@@ -12,7 +12,7 @@ class Link extends Model
 {
     use HasFactory;
 
-    const int CODE_MIN_LENGTH = 6;
+    public const int CODE_MIN_LENGTH = 6;
 
     protected $guarded = ['id', 'created_at', 'updated_at'];
 
