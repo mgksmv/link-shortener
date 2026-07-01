@@ -36,7 +36,7 @@ make down-clear
 make restart
 ```
 
-## Пересборка проекта
+#### Пересборка проекта
 ```
 make build
 ```
